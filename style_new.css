@@ -1,0 +1,19 @@
+/* style.css */
+#plot-container {
+    min-height: 400px; /* Ensure plot container has a minimum height */
+}
+
+/* Optional: Style for the placeholder text in the plot area */
+#plot-container > div > p {
+    font-style: italic;
+}
+
+/* Make progress bars slightly more visible */
+.progress {
+    height: 15px !important; /* Override bootstrap default if desired */
+}
+
+.highlight {
+    outline: rgb(106, 106, 222) dashed;
+    background: rgba(84, 183, 233, 0.3);
+}
