@@ -1,7 +1,7 @@
 import { Imagebox3 } from "https://episphere.github.io/imagebox3/imagebox3.mjs"
 import { UMAP } from "https://esm.sh/umap-js"
-// import { Decentifai } from "https://prafulb.github.io/decentifai/index.js"
-import { Decentifai } from "http://localhost:5502/index.js"
+import { Decentifai } from "https://prafulb.github.io/decentifai/index.js"
+// import { Decentifai } from "http://localhost:5502/index.js"
 
 const fedEmbed = {}
 fedEmbed.peerName = `Peer-${crypto.randomUUID().slice(0, 8)}`;
@@ -771,7 +771,8 @@ async function trainClassifierModel(embeddingObjects) {
             minPeers: 2,
             waitTime: 3000, // Increased wait time
             maxRounds: 50,
-            convergenceThresholds: { stabilityWindow: 3, parameterDistance: 0.01, lossDelta: 0.005, accuracyDelta: 0.005 }
+            convergenceThresholds: { 
+                stabilityWindow: 3, parameterDistance: 0.01, lossDelta: 0.005, accuracyDelta: 0.005 }
         },
         metadata: { name: fedEmbed.peerName },
         debug: true
