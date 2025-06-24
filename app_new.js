@@ -238,7 +238,7 @@ function display3DPlot(embeddingObjects, colorByKey = "_none_") {
             yaxis: { title: 'UMAP Dim 2', zeroline: true, showgrid: true, showticklabels: false },
             zaxis: { title: 'UMAP Dim 3', zeroline: true, showgrid: true, showticklabels: false }
         },
-        legend: { itemsizing: 'constant', orientation: 'h', yanchor: 'bottom', y: 0.01, xanchor: 'center', x: 0.5}
+        legend: { itemsizing: 'constant', orientation: 'h', yanchor: 'bottom', y: 0.01, xanchor: 'center', x: 0.5 }
     };
 
     if (colorByKey === "_none_" || !fedEmbed.availableColorByProps.includes(colorByKey)) {
@@ -332,18 +332,20 @@ function displayConvergencePlot(convergenceData) {
     }
 
     if (traces.length === 0) {
-         container.innerHTML = '<p class="text-center">Metrics (Loss, Accuracy, Distance) are not being tracked or available.</p>';
-         statusEl.textContent = `Data available for ${convergenceData.rounds} rounds, but no plottable metrics found.`;
-         return;
+        container.innerHTML = '<p class="text-center">Metrics (Loss, Accuracy, Distance) are not being tracked or available.</p>';
+        statusEl.textContent = `Data available for ${convergenceData.rounds} rounds, but no plottable metrics found.`;
+        return;
     }
 
     const layout = {
         height: 400,
         xaxis: { title: 'Federation Round', domain: [0.1, 0.9] },
-        yaxis: { title: 'Param Distance', side: 'left', titlefont: {color: 'blue'}, tickfont: {color: 'blue'}},
-        yaxis2: { title: 'Loss', overlaying: 'y', side: 'right', titlefont: {color: 'red'}, tickfont: {color: 'red'}, showgrid: false},
-        yaxis3: { title: 'Accuracy', overlaying: 'y', side: 'right', position: 0.95,
-            titlefont: {color: 'green'}, tickfont: {color: 'green'}, showgrid: false, anchor: 'free' },
+        yaxis: { title: 'Param Distance', side: 'left', titlefont: { color: 'blue' }, tickfont: { color: 'blue' } },
+        yaxis2: { title: 'Loss', overlaying: 'y', side: 'right', titlefont: { color: 'red' }, tickfont: { color: 'red' }, showgrid: false },
+        yaxis3: {
+            title: 'Accuracy', overlaying: 'y', side: 'right', position: 0.95,
+            titlefont: { color: 'green' }, tickfont: { color: 'green' }, showgrid: false, anchor: 'free'
+        },
         legend: { x: 0.5, y: 1.15, xanchor: 'center', orientation: 'h' },
         margin: { l: 60, r: 120, b: 50, t: 30 }
     };
@@ -390,20 +392,22 @@ function initializeOSDViewer(tileSource) {
     }
 }
 
+async function createImagebox3Instance(identifier) {
+    const numWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2));
+    fedEmbed.imagebox3Instance = new Imagebox3(identifier, numWorkers);
+    try {
+        await fedEmbed.imagebox3Instance.init();
+    } catch (e) {
+        console.error("Imagebox3 init failed:", e);
+        alert(`Error initializing Imagebox3: ${e.message}`);
+        return undefined;
+    }
+}
+
 async function createTileSource(identifier) {
-    const isFile = identifier instanceof File;
-    const imageId = isFile ? identifier.name : identifier;
 
     if (!fedEmbed.imagebox3Instance) {
-        const numWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2));
-        fedEmbed.imagebox3Instance = new Imagebox3(identifier, numWorkers);
-        try {
-            await fedEmbed.imagebox3Instance.init();
-        } catch (e) {
-             console.error("Imagebox3 init failed:", e);
-             alert(`Error initializing Imagebox3: ${e.message}`);
-             return undefined;
-        }
+        await createImagebox3Instance(identifier)
     } else {
         fedEmbed.imagebox3Instance.changeImageSource(identifier)
     }
@@ -422,7 +426,7 @@ async function createTileSource(identifier) {
 }
 
 
-const findTissueRegionsInImage = (gridDim = 8, thumbnailWidth = 1024) => new Promise(async (resolve, reject) => {
+const findTissueRegionsInImage = (gridDim = 8, thumbnailWidth = 1024, minTissueProportion=0.45) => new Promise(async (resolve, reject) => {
     if (!fedEmbed.imagebox3Instance) return reject("Imagebox not initialized");
     try {
         const imageInfo = await fedEmbed.imagebox3Instance.getInfo();
@@ -445,7 +449,7 @@ const findTissueRegionsInImage = (gridDim = 8, thumbnailWidth = 1024) => new Pro
                 for (let colIdx = 0; colIdx < gridDim; colIdx++) {
                     const sx = colIdx * tileWidthInThumb;
                     const sy = rowIdx * tileHeightInThumb;
-                    offscreenCtx.clearRect(0,0, offscreenCanvas.width, offscreenCanvas.height);
+                    offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
                     offscreenCtx.drawImage(thumbnailImg, sx, sy, tileWidthInThumb, tileHeightInThumb, 0, 0, tileWidthInThumb, tileHeightInThumb);
 
                     const emptyPercentage = isTileEmpty(offscreenCanvas, offscreenCtx, 0.9, true);
@@ -462,7 +466,11 @@ const findTissueRegionsInImage = (gridDim = 8, thumbnailWidth = 1024) => new Pro
                 }
             }
             URL.revokeObjectURL(thumbnailURL); // Clean up blob URL
-            resolve(tissueRegions.sort((a, b) => a.emptyPercentage - b.emptyPercentage).slice(0, Math.floor(gridDim*gridDim / 2))); // Keep less empty half
+            let tissueRegionsAboveThreshold = tissueRegions.filter(reg => reg.emptyPercentage < 1 - minTissueProportion)
+            if (tissueRegionsAboveThreshold.length === 0) { // If the tissue is really sparse, return just the top half
+                tissueRegionsAboveThreshold = tissueRegions.slice(0, Math.floor(gridDim * gridDim / 2))
+            }
+            resolve(tissueRegionsAboveThreshold.sort((a, b) => a.emptyPercentage - b.emptyPercentage))
         };
         thumbnailImg.onerror = () => { URL.revokeObjectURL(thumbnailURL); reject("Thumbnail image load error"); };
     } catch (e) {
@@ -547,6 +555,151 @@ function imageTransforms(imageArray, targetSize = 224, mean = [0.485, 0.456, 0.4
     return float32Array;
 }
 
+export async function embedSlideAndExportEmbeddings(wsiIdentifierString, params) {
+    // showViewer('osd');
+    const onnxRuntime = await import("https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/esm/ort.min.js");
+
+    if (!fedEmbed.embeddingModel || fedEmbed.embeddingModel.modelId !== params.modelInfo.modelId) {
+        // updateStatus(`Loading Embedding Model: ${params.modelInfo.modelName}...`, true);
+        try {
+            onnxRuntime.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+            fedEmbed.embeddingModel = await onnxRuntime.InferenceSession.create(params.modelInfo.modelURL, { executionProviders: ['wasm'] });
+            fedEmbed.embeddingModel.modelId = params.modelInfo.modelId;
+        } catch (e) {
+            console.error("Failed to load ONNX model:", e);
+            // updateStatus(`Error loading model: ${e.message}`, false);
+            throw e;
+        }
+    }
+
+    if (!fedEmbed.imagebox3Instance) {
+        await createImagebox3Instance(wsiIdentifierString)
+    } else if (fedEmbed.imagebox3Instance.getImageSource() !== wsiIdentifierString) {
+        await fedEmbed.imagebox3Instance.changeImageSource(wsiIdentifierString)
+    }
+
+    // updateStatus(`Finding tissue regions in ${wsiIdentifierString}...`, true);
+    const tissueRegions = await findTissueRegionsInImage();
+    // updateStatus(`Embedding ${params.numPatches} patches from ${wsiIdentifierString}...`, true);
+
+    let currentPatchNum = 0;
+    let patchEmbeddings = [];
+    const patchCanvas = new OffscreenCanvas(params.patchWidth, params.patchHeight); // Use configured patch W/H for drawing
+    const patchCtx = patchCanvas.getContext("2d");
+
+    const targetEmbeddingPatchSize = 224; // Most vision models expect 224x224
+
+    for (let i = 0; i < params.numPatches * 2 && currentPatchNum < params.numPatches; i++) { // Try more times to get enough non-empty
+        // showProgress(fedEmbed.htmlElements.patchingProgressBar, Math.round(100 * currentPatchNum / params.numPatches));
+        // Request tile of targetEmbeddingPatchSize for model input, Imagebox3 will handle source resolution
+        const tileParams = await getRandomTileParams(fedEmbed.imagebox3Instance, tissueRegions, targetEmbeddingPatchSize);
+
+        if (isNaN(tileParams.tileX)) continue;
+
+        let tileBlob;
+        try {
+            tileBlob = await fedEmbed.imagebox3Instance.getTile(tileParams.tileX, tileParams.tileY, tileParams.tileWidth, tileParams.tileHeight, tileParams.tileSize);
+        } catch (e) {
+            console.warn("Failed to get tile:", tileParams, e);
+            continue;
+        }
+        if (!tileBlob || tileBlob.size === 0) continue;
+
+        const tileURL = URL.createObjectURL(tileBlob);
+        const tempImg = new Image();
+        tempImg.src = tileURL;
+        tempImg.crossOrigin = "anonymous";
+
+        let imageTensor;
+        try {
+            await new Promise((resolve, reject) => {
+                tempImg.onload = () => {
+                    patchCtx.clearRect(0, 0, patchCanvas.width, patchCanvas.height);
+                    patchCtx.drawImage(tempImg, 0, 0, targetEmbeddingPatchSize, targetEmbeddingPatchSize);
+                    URL.revokeObjectURL(tileURL);
+
+                    if (isTileEmpty(patchCanvas, patchCtx)) {
+                        resolve(undefined); return;
+                    }
+                    const imageData = patchCtx.getImageData(0, 0, targetEmbeddingPatchSize, targetEmbeddingPatchSize).data;
+                    const transformedData = imageTransforms(imageData, targetEmbeddingPatchSize);
+                    resolve(new onnxRuntime.Tensor("float32", transformedData, [1, 3, targetEmbeddingPatchSize, targetEmbeddingPatchSize]));
+                };
+                tempImg.onerror = () => { URL.revokeObjectURL(tileURL); reject("Image load error for patch."); };
+            }).then(tensor => imageTensor = tensor);
+        } catch (e) {
+            console.warn("Error processing patch:", e);
+            continue;
+        }
+
+        if (!imageTensor) continue;
+
+        // if (fedEmbed.osdViewer && fedEmbed.osdViewer.isOpen()) {
+        //     const existingOverlay = document.getElementById("runtime-patch-overlay");
+        //     if (existingOverlay) fedEmbed.osdViewer.removeOverlay(existingOverlay);
+
+        //     const elt = document.createElement("div");
+        //     elt.id = "runtime-patch-overlay";
+        //     elt.className = "highlight"; // Add CSS for .highlight { border: 2px solid yellow; }
+        //     fedEmbed.osdViewer.addOverlay({
+        //         element: elt,
+        //         location: fedEmbed.osdViewer.viewport.imageToViewportRectangle(tileParams.tileX, tileParams.tileY, tileParams.tileWidth, tileParams.tileHeight)
+        //     });
+        // }
+
+        const inputToModel = {}
+        inputToModel[fedEmbed.embeddingModel.inputNames[0]] = imageTensor
+        const modelOutput = await fedEmbed.embeddingModel.run(inputToModel);
+        const embeddingOutput = modelOutput[fedEmbed.embeddingModel.outputNames[0]]
+        const rawEmbedding = Array.from(embeddingOutput.data);
+        
+        const extractCLSToken = (embeddings, embedDim = 768) => {
+            const clsToken = new Float32Array(embedDim);
+            for (let i = 0; i < embedDim && i < embeddings.length; i++) {
+                clsToken[i] = embeddings[i];
+            }
+            return clsToken;
+        }
+        const embedding = extractCLSToken(rawEmbedding)
+        
+        patchEmbeddings.push({
+            wsiId: params.wsiId,
+            wsiURL: params.wsiURL,
+            gcsWSIURL: params.gcsWSIURL,
+            properties: params.properties,
+            tileParams, // tileX, tileY, tileWidth, tileHeight, tileSize (output size)
+            embedding,
+            embeddingModel: params.modelInfo.modelName,
+            generatedAtEpoch: Date.now()
+        });
+        currentPatchNum++;
+    }
+
+    // hideProgress(fedEmbed.htmlElements.patchingProgressBar);
+    if (patchEmbeddings.length === 0) {
+        // updateStatus(`No valid patches found or embedded from ${wsiIdentifierString}. Try different parameters or WSI.`, false);
+        return [];
+    }
+
+    // updateStatus(`Generated ${patchEmbeddings.length} embeddings. Projecting with UMAP...`, true);
+    // const embeddingVectors = patchEmbeddings.map(p => p.embedding);
+    // const embeddingVectorsUMAP = await runUMAP(embeddingVectors);
+
+    patchEmbeddings = patchEmbeddings.map((p, i) => {
+        // const patchEmbeddingsDimReduced = patchEmbeddings.map((p, i) => {
+        // p['embedding3d'] = embeddingVectorsUMAP[i];
+        p['properties'] = fedEmbed.availableColorByProps.reduce((o, propKey) => {
+            const inputEl = document.getElementById(`${propKey}-propInput`);
+            o[propKey] = inputEl ? inputEl.value : params[propKey]; // Use live value from input
+            return o;
+        }, {});
+        return p;
+    });
+    // updateStatus(`Generated and projected ${patchEmbeddingsDimReduced.length} embeddings.`, false);
+    return patchEmbeddings;
+    // return patchEmbeddingsDimReduced;
+}
+
 
 async function generatePatchesAndEmbeddings(wsiIdentifierString, params) {
     showViewer('osd');
@@ -568,6 +721,8 @@ async function generatePatchesAndEmbeddings(wsiIdentifierString, params) {
     if (!fedEmbed.imagebox3Instance) {
         updateStatus('Error: Image viewer not initialized.', false);
         throw new Error("Imagebox3 instance not available.");
+    } else if (fedEmbed.imagebox3Instance.getImageSource() !== wsiIdentifierString) {
+        fedEmbed.imagebox3Instance.changeImageSource(wsiIdentifierString)
     }
 
     updateStatus(`Finding tissue regions in ${wsiIdentifierString}...`, true);
@@ -607,7 +762,7 @@ async function generatePatchesAndEmbeddings(wsiIdentifierString, params) {
         try {
             await new Promise((resolve, reject) => {
                 tempImg.onload = () => {
-                    patchCtx.clearRect(0,0, patchCanvas.width, patchCanvas.height);
+                    patchCtx.clearRect(0, 0, patchCanvas.width, patchCanvas.height);
                     patchCtx.drawImage(tempImg, 0, 0, targetEmbeddingPatchSize, targetEmbeddingPatchSize);
                     URL.revokeObjectURL(tileURL);
 
@@ -640,13 +795,27 @@ async function generatePatchesAndEmbeddings(wsiIdentifierString, params) {
             });
         }
 
-        const { embedding: embeddingOutput } = await fedEmbed.embeddingModel.run({ image: imageTensor }); // Ensure 'image' is the correct input name
-        const rawEmbedding = Array.from(embeddingOutput.data); // .data for Ort.Tensor
+        const inputToModel = {}
+        inputToModel[fedEmbed.embeddingModel.inputNames[0]] = imageTensor
+        const modelOutput = await fedEmbed.embeddingModel.run(inputToModel);
+        const embeddingOutput = modelOutput[fedEmbed.embeddingModel.outputNames[0]]
+        const rawEmbedding = Array.from(embeddingOutput.data);
+        
+        const extractCLSToken = (embeddings, embedDim = 768) => {
+            const clsToken = new Float32Array(embedDim);
+            for (let i = 0; i < embedDim && i < embeddings.length; i++) {
+                clsToken[i] = embeddings[i];
+            }
+            return clsToken;
+        }
+        const embedding = extractCLSToken(rawEmbedding)
 
         patchEmbeddings.push({
             wsiId: wsiIdentifierString,
             tileParams, // tileX, tileY, tileWidth, tileHeight, tileSize (output size)
             embedding: rawEmbedding,
+            embeddingModel: params.modelInfo.modelName,
+            generatedAtEpoch: Date.now(),
             sourcePeer: fedEmbed.decentifaiInstance ? fedEmbed.decentifaiInstance.getSelfPeerId() : 'local',
             displayName: fedEmbed.decentifaiInstance ? (fedEmbed.decentifaiInstance.awareness.getLocalState()?.metadata?.name || fedEmbed.peerName) : fedEmbed.peerName
         });
@@ -659,12 +828,12 @@ async function generatePatchesAndEmbeddings(wsiIdentifierString, params) {
         return [];
     }
 
-    updateStatus(`Generated ${patchEmbeddings.length} embeddings. Projecting with UMAP...`, true);
-    const embeddingVectors = patchEmbeddings.map(p => p.embedding);
-    const embeddingVectorsUMAP = await runUMAP(embeddingVectors);
+    updateStatus(`Generated ${patchEmbeddings.length} embeddings.`, true);
+    // const embeddingVectors = patchEmbeddings.map(p => p.embedding);
+    // const embeddingVectorsUMAP = await runUMAP(embeddingVectors);
 
-    const patchEmbeddingsDimReduced = patchEmbeddings.map((p, i) => {
-        p['embedding3d'] = embeddingVectorsUMAP[i];
+    const patchEmbeddingsWithProperties = patchEmbeddings.map((p, i) => {
+        // p['embedding3d'] = embeddingVectorsUMAP[i];
         p['properties'] = fedEmbed.availableColorByProps.reduce((o, propKey) => {
             const inputEl = document.getElementById(`${propKey}-propInput`);
             o[propKey] = inputEl ? inputEl.value : params[propKey]; // Use live value from input
@@ -672,8 +841,8 @@ async function generatePatchesAndEmbeddings(wsiIdentifierString, params) {
         }, {});
         return p;
     });
-    updateStatus(`Generated and projected ${patchEmbeddingsDimReduced.length} embeddings.`, false);
-    return patchEmbeddingsDimReduced;
+
+    return patchEmbeddingsWithProperties;
 }
 
 async function trainClassifierModel(embeddingObjects) {
@@ -771,8 +940,9 @@ async function trainClassifierModel(embeddingObjects) {
             minPeers: 2,
             waitTime: 3000, // Increased wait time
             maxRounds: 50,
-            convergenceThresholds: { 
-                stabilityWindow: 3, parameterDistance: 0.01, lossDelta: 0.005, accuracyDelta: 0.005 }
+            convergenceThresholds: {
+                stabilityWindow: 3, parameterDistance: 0.01, lossDelta: 0.005, accuracyDelta: 0.005
+            }
         },
         metadata: { name: fedEmbed.peerName },
         debug: true
@@ -796,9 +966,9 @@ function setupDecentifaiEventListeners(federation, model) { // model passed for 
         appendToResultsOutput(`Peer connected: ${name}. Total peers in list: ${e.detail.peers.length}.`);
         updateTrainingStatus(`Peers connected: ${e.detail.peers.length + 1}. Waiting for minimum ${federation.options.federationOptions.minPeers}.`, federation.isTraining);
     });
-     federation.on("peersRemoved", (e) => {
+    federation.on("peersRemoved", (e) => {
         appendToResultsOutput(`Peer disconnected. Total peers in list: ${e.detail.peers.length}.`);
-         updateTrainingStatus(`Peers connected: ${e.detail.peers.length + 1}.`, federation.isTraining);
+        updateTrainingStatus(`Peers connected: ${e.detail.peers.length + 1}.`, federation.isTraining);
     });
 
 
@@ -823,9 +993,9 @@ function setupDecentifaiEventListeners(federation, model) { // model passed for 
         showProgress(fedEmbed.htmlElements.trainingProgressBar, 50); // Indicate local part done
         // Log metrics from local training if model.fit history is accessible
         if (e.detail.modelInfo && e.detail.modelInfo.history) {
-             const loss = e.detail.modelInfo.history.loss.slice(-1)[0];
-             const acc = e.detail.modelInfo.history.acc.slice(-1)[0];
-             appendToResultsOutput(`Local training - Epoch Loss: ${loss?.toFixed(4)}, Acc: ${acc?.toFixed(4)}`);
+            const loss = e.detail.modelInfo.history.loss.slice(-1)[0];
+            const acc = e.detail.modelInfo.history.acc.slice(-1)[0];
+            appendToResultsOutput(`Local training - Epoch Loss: ${loss?.toFixed(4)}, Acc: ${acc?.toFixed(4)}`);
         }
     });
 
@@ -847,8 +1017,8 @@ function setupDecentifaiEventListeners(federation, model) { // model passed for 
         displayConvergencePlot(metrics); // Update convergence plot
         updateTrainingStatus(`Round ${e.detail.round} completed. Waiting for next round or convergence.`, false); // Ready for next
         if (federation.converged) { // Check if converged after this round
-             updateTrainingStatus(`Model converged after round ${e.detail.round}!`, false);
-             hideProgress(fedEmbed.htmlElements.trainingProgressBar);
+            updateTrainingStatus(`Model converged after round ${e.detail.round}!`, false);
+            hideProgress(fedEmbed.htmlElements.trainingProgressBar);
         }
     });
 
@@ -865,7 +1035,7 @@ function setupDecentifaiEventListeners(federation, model) { // model passed for 
         updateTrainingStatus(`Error during training: ${e.detail.error}`, false);
         hideProgress(fedEmbed.htmlElements.trainingProgressBar);
     });
-     federation.on("autoTrainingStopped", (e) => {
+    federation.on("autoTrainingStopped", (e) => {
         appendToResultsOutput(`Auto-training stopped. Reason: ${e.detail.reason}.`);
         updateTrainingStatus(`Training stopped: ${e.detail.reason}.`, false);
         hideProgress(fedEmbed.htmlElements.trainingProgressBar);
@@ -890,7 +1060,7 @@ const buildModel = async (inputShape, numClasses, arch = [128, 64], activation =
     // Hidden layers
     for (let i = 1; i < arch.length; i++) {
         model.add(tf.layers.dense({ units: arch[i], activation: activation, useBias: true }));
-        model.add(tf.layers.dropout({rate: 0.3})); // Add dropout for regularization
+        model.add(tf.layers.dropout({ rate: 0.3 })); // Add dropout for regularization
     }
     // Output layer
     model.add(tf.layers.dense({ units: numClasses, activation: 'softmax' }));
@@ -932,10 +1102,10 @@ const extendTFModel = (model, trainingData, testData) => { // trainingData and t
         if (model.currentTestData && model.currentTestData.x && model.currentTestData.y) {
             const evaluation = model.evaluate(model.currentTestData.x, model.currentTestData.y, { batchSize: 32 });
             const accTensor = Array.isArray(evaluation) ? evaluation[1] : null; // tf.Scalar for accuracy
-             if (accTensor) {
+            if (accTensor) {
                 const acc = await accTensor.data();
                 return acc[0]; // Return the scalar value
-             }
+            }
         }
         const lastEpochAcc = model.history?.history?.acc?.slice(-1)[0];
         return typeof lastEpochAcc === 'number' ? lastEpochAcc : 0.0; // Ensure number
@@ -1004,7 +1174,7 @@ function setupSharedEmbeddingObserver(decentifaiInstance) {
             sharedEmbeddingsMap.forEach(batch => {
                 if (Array.isArray(batch)) {
                     // Ensure displayName is present
-                     batch.forEach(e => {
+                    batch.forEach(e => {
                         if (!e.displayName && e.sourcePeer) {
                             const peerState = decentifaiInstance.awareness.getStates().get(parseInt(e.sourcePeer));
                             e.displayName = peerState?.metadata?.name || `Peer ${e.sourcePeer.toString().slice(-4)}`;
@@ -1023,8 +1193,8 @@ function setupSharedEmbeddingObserver(decentifaiInstance) {
                 display3DPlot(fedEmbed.currentLocalEmbeddings, fedEmbed.htmlElements.colorBySelect.value);
                 populateColorBySelector(fedEmbed.currentLocalEmbeddings);
             } else {
-                 showViewer('placeholder');
-                 fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'No embeddings to display. Generate or wait for peers to share.';
+                showViewer('placeholder');
+                fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'No embeddings to display. Generate or wait for peers to share.';
             }
         };
 
@@ -1077,8 +1247,8 @@ const loadWSI = async () => {
             if (tileSource) {
                 initializeOSDViewer(tileSource);
             } else {
-                 showViewer('placeholder');
-                 fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'Failed to create tile source for the WSI.';
+                showViewer('placeholder');
+                fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'Failed to create tile source for the WSI.';
             }
         } catch (error) {
             console.error("Error creating tile source or initializing viewer:", error);
@@ -1119,8 +1289,8 @@ fedEmbed.htmlElements.generateBtn.addEventListener('click', async () => {
         // ROI not implemented in patch generation yet: roi: fedEmbed.currentROI
     };
     fedEmbed.availableColorByProps.forEach(propKey => {
-         const inputEl = document.getElementById(`${propKey}-propInput`);
-         if(inputEl) params[propKey] = inputEl.value;
+        const inputEl = document.getElementById(`${propKey}-propInput`);
+        if (inputEl) params[propKey] = inputEl.value;
     });
 
     if (params.numPatches <= 0 || params.patchWidth <= 0 || params.patchHeight <= 0) {
@@ -1135,9 +1305,17 @@ fedEmbed.htmlElements.generateBtn.addEventListener('click', async () => {
         if (!newEmbeddings || newEmbeddings.length === 0) {
             throw new Error("No embeddings were generated. Check WSI or parameters.");
         }
+        
         let embeddingsToPlot = [...fedEmbed.currentLocalEmbeddings, ...newEmbeddings];
-        console.log(fedEmbed.currentLocalEmbeddings, newEmbeddings)
-        fedEmbed.currentLocalEmbeddings = newEmbeddings;
+        const allRawEmbeddingVectors = embeddingsToPlot.map(patch => patch.embedding)
+        const allEmbeddingVectorsUMAP = await runUMAP(allRawEmbeddingVectors)
+        fedEmbed.currentLocalEmbeddings = embeddingsToPlot.map((p, i) => {
+            p.embedding3d = allEmbeddingVectorsUMAP[i];
+            p.wsiId = p.wsiId || dataToPlotConfig.id; // Ensure wsiId for example data
+            p.sourcePeer = p.sourcePeer || 'example'
+            p.displayName = p.displayName || 'Example Data';
+            return p
+        })
 
         if (fedEmbed.htmlElements.shareEmbeddingsCheck.checked) {
             await shareEmbeddingsViaWebRTC(fedEmbed.currentLocalEmbeddings); // Share them
@@ -1145,13 +1323,13 @@ fedEmbed.htmlElements.generateBtn.addEventListener('click', async () => {
             // So, we might not need to explicitly plot 'allSharedEmbeddings' here again,
             // as shareEmbeddingsViaWebRTC or the observer should handle it.
             // For safety, if observer is async, plotting local first is fine.
-             if (fedEmbed.allSharedEmbeddings.length > 0) { // If shared data already exists, prefer that view
-                 embeddingsToPlot = fedEmbed.allSharedEmbeddings;
-             }
+            if (fedEmbed.allSharedEmbeddings.length > 0) { // If shared data already exists, prefer that view
+                embeddingsToPlot = fedEmbed.allSharedEmbeddings;
+            }
         }
-        
-        populateColorBySelector(embeddingsToPlot.length > 0 ? embeddingsToPlot : fedEmbed.currentLocalEmbeddings); // Use whatever is available
-        display3DPlot(embeddingsToPlot.length > 0 ? embeddingsToPlot : fedEmbed.currentLocalEmbeddings, fedEmbed.htmlElements.colorBySelect.value);
+
+        populateColorBySelector(fedEmbed.currentLocalEmbeddings)
+        display3DPlot(fedEmbed.currentLocalEmbeddings, fedEmbed.htmlElements.colorBySelect.value)
 
 
         fedEmbed.htmlElements.trainingControls.style.display = 'block';
@@ -1169,7 +1347,7 @@ fedEmbed.htmlElements.generateBtn.addEventListener('click', async () => {
 
 fedEmbed.htmlElements.colorBySelect.addEventListener('change', (event) => {
     const embeddingsToDisplay = (fedEmbed.htmlElements.shareEmbeddingsCheck.checked && fedEmbed.allSharedEmbeddings.length > 0) ?
-                                 fedEmbed.allSharedEmbeddings : fedEmbed.currentLocalEmbeddings;
+        fedEmbed.allSharedEmbeddings : fedEmbed.currentLocalEmbeddings;
     if (embeddingsToDisplay.length > 0) {
         display3DPlot(embeddingsToDisplay, event.target.value);
     }
@@ -1215,9 +1393,9 @@ async function displayDefaultEmbeddings() {
         const urlSearchParams = new URLSearchParams(location.search);
         let dataToPlotConfig = EXAMPLE_DATA.find(d => d.id === urlSearchParams.get("id")) || EXAMPLE_DATA[0];
         if (!dataToPlotConfig) {
-             showViewer('placeholder');
-             fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'No example data configured.';
-             return;
+            showViewer('placeholder');
+            fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'No example data configured.';
+            return;
         }
 
         updateStatus(`Loading example embeddings: ${dataToPlotConfig.id}...`, true);
@@ -1267,7 +1445,7 @@ async function initializeApp() {
     // hideProgress(fedEmbed.htmlElements.embeddingProgressBar.parentElement); // Ensure this element exists or remove
     hideProgress(fedEmbed.htmlElements.trainingProgressBar);
 
-     // Event listener for the share embeddings checkbox
+    // Event listener for the share embeddings checkbox
     fedEmbed.htmlElements.shareEmbeddingsCheck.addEventListener('change', (event) => {
         if (event.target.checked) {
             appendToResultsOutput("Embedding sharing enabled. Will share new embeddings and listen for others.");
@@ -1277,7 +1455,7 @@ async function initializeApp() {
                     shareEmbeddingsViaWebRTC(fedEmbed.currentLocalEmbeddings);
                 }
             } else {
-                 appendToResultsOutput("Note: Start a training session to activate P2P network for sharing.");
+                appendToResultsOutput("Note: Start a training session to activate P2P network for sharing.");
             }
         } else {
             appendToResultsOutput("Embedding sharing disabled. Plot will only show local embeddings.");
@@ -1288,7 +1466,7 @@ async function initializeApp() {
                 populateColorBySelector(fedEmbed.currentLocalEmbeddings);
             } else {
                 showViewer('placeholder');
-                 fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'Generate embeddings to visualize.';
+                fedEmbed.htmlElements.visualizationPlaceholder.querySelector('p').textContent = 'Generate embeddings to visualize.';
             }
         }
     });

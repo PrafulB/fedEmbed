@@ -15,6 +15,7 @@ const SUPPORTED_MODELS = [
         "modelURL": "https://huggingface.co/kaczmarj/CTransPath/resolve/main/model.onnx",
         "multimodal": false,
         "defaultNumPatches": 50,
+        "embeddingDimension": 768,
         "enabled": true
     },
     {
@@ -23,6 +24,7 @@ const SUPPORTED_MODELS = [
         "modelURL": "https://huggingface.co/prafulb/phikon-onnx/resolve/main/model.onnx",
         "multimodal": false,
         "defaultNumPatches": 50,
+        "embeddingDimension": 768,
         "enabled": true
     },
     {
@@ -31,7 +33,7 @@ const SUPPORTED_MODELS = [
         "modelURL": "https://huggingface.co/prafulb/plip-onnx/resolve/main/model.onnx",
         "multimodal": true,
         "defaultNumPatches": 1, // Note: Default is 1, might need adjustment
-        "enabled": true
+        "enabled": false
     },
     {
         "modelId": 3,
