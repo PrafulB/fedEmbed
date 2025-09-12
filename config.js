@@ -1,5 +1,5 @@
 const EXAMPLE_DATA = [
-    { id: "gleason_patches", path: "data/wsiGleasonPatchEmbeddings.json", colorBy: "gleason_score" },
+    { id: "gleason_patches", path: "http://localhost:5502/data/tcgaGleasonPhikonEmbeddings.json", colorBy: "gleason_score" },
     { id: "wsi_slides", path: "https://prafulb.github.io/fese/data/tcgaSlideEmbeddingsTSNE4Classes.json", colorBy: "Primary Site" },
     { id: "tcga_reports", path: "https://prafulb.github.io/fese/data/tcga_reports_tsne.json.zip", colorBy: "cancer_type" },
     { id: "gleason_slides", path: "data/tcgaGleasonSlideEmbeddingsTSNE.json", colorBy: "gleason_score" },
@@ -15,7 +15,13 @@ const SUPPORTED_MODELS = [
         "modelURL": "https://huggingface.co/kaczmarj/CTransPath/resolve/main/model.onnx",
         "multimodal": false,
         "defaultNumPatches": 50,
+        "tileResolution": 256,
+        "tileSizeForModel": 224,
         "embeddingDimension": 768,
+        "imageTransforms": {
+            "mean": [0.485, 0.456, 0.406],
+            "std": [0.229, 0.224, 0.225]
+        },
         "enabled": true
     },
     {
@@ -24,11 +30,32 @@ const SUPPORTED_MODELS = [
         "modelURL": "https://huggingface.co/prafulb/phikon-onnx/resolve/main/model.onnx",
         "multimodal": false,
         "defaultNumPatches": 50,
+        "tileResolution": 224,
+        "tileSizeForModel": 224,
         "embeddingDimension": 768,
+        "imageTransforms": {
+            "mean": [0.485, 0.456, 0.406],
+            "std": [0.229, 0.224, 0.225]
+        },
         "enabled": true
     },
     {
         "modelId": 2,
+        "modelName": "Phikon-v2",
+        "modelURL": "https://huggingface.co/prafulb/phikonv2-onnx/resolve/main/model.onnx",
+        "multimodal": false,
+        "defaultNumPatches": 50,
+        "tileResolution": 224,
+        "tileSizeForModel": 224,
+        "embeddingDimension": 1024,
+        "imageTransforms": {
+            "mean": [0.485, 0.456, 0.406],
+            "std": [0.229, 0.224, 0.225]
+        },
+        "enabled": true
+    },
+    {
+        "modelId": 3,
         "modelName": "PLIP",
         "modelURL": "https://huggingface.co/prafulb/plip-onnx/resolve/main/model.onnx",
         "multimodal": true,
@@ -36,7 +63,7 @@ const SUPPORTED_MODELS = [
         "enabled": false
     },
     {
-        "modelId": 3,
+        "modelId": 4,
         "modelName": "CONCH",
         "modelURL": "https://huggingface.co/MahmoodLab/CONCH",
         "multimodal": true,
