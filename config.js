@@ -15,7 +15,7 @@ const SUPPORTED_MODELS = [
         "modelURL": "https://huggingface.co/kaczmarj/CTransPath/resolve/main/model.onnx",
         "multimodal": false,
         "defaultNumPatches": 50,
-        "tileResolution": 256,
+        "tileResolution": 224,
         "tileSizeForModel": 224,
         "embeddingDimension": 768,
         "imageTransforms": {
