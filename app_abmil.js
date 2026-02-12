@@ -121,7 +121,7 @@ function processData(labelKey) {
     // 1. Group by wsiId
     const groups = {};
     appState.data.forEach(item => {
-        
+
         const id = item.wsiId || "unknown";
         if (item.properties?.[labelKey]) {
 
@@ -361,7 +361,7 @@ async function startFederatedTraining() {
 
         // Setup Decentifai
         const iceServers = await (await fetch(DEFAULTS.turnCredsAPI)).json().then(d => d.iceServers).catch(() => []);
-
+        console.log(iceServers)
         if (appState.decentifaiInstance) {
             appState.decentifaiInstance.disconnect();
         }
@@ -370,7 +370,8 @@ async function startFederatedTraining() {
             iceServers: iceServers,
             model: appState.model,
             backend: "tfjs",
-            roomId: `fedembed-abmil-${numClasses}class`,
+            // roomId: `fedembed-abmil-${numClasses}class`,
+            roomId: `fedembed-abmil-gleason`,
             trainingData: trainingData,
             trainingOptions: {
                 epochs: 5,
