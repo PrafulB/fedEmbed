@@ -1,4 +1,5 @@
 import { Decentifai } from "https://prafulb.github.io/decentifai/src/decentifai.js";
+// import { Decentifai } from "http://localhost:5505/src/decentifai.js";
 // Assuming Decentifai is available there or we adjust import based on environment
 
 const DEFAULTS = {
@@ -137,7 +138,6 @@ function processData(labelKey) {
             }
         }
     });
-    console.log(groups)
     // 2. Filter invalid groups (no label or no embeddings)
     appState.groupedData = Object.values(groups).filter(g =>
         g.embeddings.length > 0 && g.labelValue !== undefined && g.labelValue !== null
@@ -146,7 +146,7 @@ function processData(labelKey) {
     appendLog(`Grouped ${appState.data.length} patches into ${appState.groupedData.length} WSIs based on ID.`);
 
     // Check label distribution
-    const labels = appState.groupedData.map(g => g.labelValue);
+    const labels = appState.groupedData.map(g => g.labelValue.toString());
     const uniqueLabels = [...new Set(labels)];
     appendLog(`Found labels: ${uniqueLabels.join(', ')}`);
 }
@@ -154,7 +154,8 @@ function processData(labelKey) {
 async function prepareTensors() {
     const maxPatches = parseInt(ui.maxPatchesInput.value) || 1000;
     const embeddingDim = appState.groupedData[0].embeddings[0].length;
-    const uniqueLabels = [...new Set(appState.groupedData.map(g => g.labelValue))].sort();
+    // const uniqueLabels = [...new Set(appState.groupedData.map(g => g.labelValue))].sort();
+    const uniqueLabels = [6, 7, 8, 9, 10];
     const labelMap = {};
     uniqueLabels.forEach((l, i) => labelMap[l] = i);
     const numClasses = uniqueLabels.length;
@@ -262,7 +263,7 @@ async function buildAbMILModel(inputShape, numClasses) { // inputShape is [maxPa
     const model = tf.model({ inputs: input, outputs: output });
 
     model.compile({
-        optimizer: tf.train.adam(0.0005),
+        optimizer: tf.train.adam(0.001),
         loss: 'categoricalCrossentropy',
         metrics: ['accuracy']
     });
@@ -270,6 +271,7 @@ async function buildAbMILModel(inputShape, numClasses) { // inputShape is [maxPa
     model.summary();
     return model;
 }
+
 
 
 // --- 3. Extend Model with Required Methods ---
@@ -377,7 +379,7 @@ async function startFederatedTraining() {
                 epochs: 5,
                 batchSize: 32 // Small batch size for bag-level data (memory intensive)
             },
-            autoTrain: true,
+            autoTrain: false,
             federationOptions: {
                 minPeers: 2, // Allow expected "1" for testing if alone, or 2 for real P2P
                 waitTime: 3000,
@@ -387,7 +389,7 @@ async function startFederatedTraining() {
             metadata: { name: appState.peerName },
             debug: true
         });
-
+        appState.decentifaiInstance.setAutoTraining(true);
         setupDecentifaiListeners();
         updateTrainingStatus("Waiting for peers/federation...", true);
 
