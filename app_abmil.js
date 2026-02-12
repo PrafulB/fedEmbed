@@ -121,19 +121,23 @@ function processData(labelKey) {
     // 1. Group by wsiId
     const groups = {};
     appState.data.forEach(item => {
+        
         const id = item.wsiId || "unknown";
-        if (!groups[id]) {
-            groups[id] = {
-                wsiId: id,
-                embeddings: [],
-                labelValue: item.properties?.[labelKey]
-            };
-        }
-        if (item.embedding) {
-            groups[id].embeddings.push(item.embedding);
+        if (item.properties?.[labelKey]) {
+
+            if (!groups[id]) {
+                groups[id] = {
+                    wsiId: id,
+                    embeddings: [],
+                    labelValue: item.properties?.[labelKey]
+                };
+            }
+            if (item.properties?.[labelKey] && item.embedding) {
+                groups[id].embeddings.push(item.embedding);
+            }
         }
     });
-
+    console.log(groups)
     // 2. Filter invalid groups (no label or no embeddings)
     appState.groupedData = Object.values(groups).filter(g =>
         g.embeddings.length > 0 && g.labelValue !== undefined && g.labelValue !== null
