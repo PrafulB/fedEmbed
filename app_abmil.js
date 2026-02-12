@@ -1,4 +1,4 @@
-import { Decentifai } from "http://localhost:5505/index.js";
+import { Decentifai } from "https://prafulb.github.io/decentifai/src/decentifai.js";
 // Assuming Decentifai is available there or we adjust import based on environment
 
 const DEFAULTS = {
